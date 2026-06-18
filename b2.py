@@ -1,360 +1,267 @@
 from abc import ABC, abstractmethod
 
 
-class BaseAccount(ABC):
-    bank_name = "Vietcombank"
+class BaseProduct(ABC):
+    warehouse_name = "Amazon Logistics"
+    base_storage_fee = 5000
 
-    def __init__(self, account_number, owner_name, balance=0):
-        self.account_number = account_number
-        self.owner_name = " ".join(owner_name.upper().split())
-        self._BaseAccount__balance = balance
+    def __init__(self, product_code, product_name):
+        self.product_code = product_code
+        self.product_name = product_name.strip().upper()
+        self.__stock_quantity = 0
 
     @property
-    def balance(self):
-        return self.__balance
+    def stock_quantity(self):
+        return self.__stock_quantity
 
-    def increase(self, amount):
-        self.__balance += amount
-
-    def decrease(self, amount):
-        self.__balance -= amount
+    def _set_stock(self, quantity):
+        self.__stock_quantity = quantity
 
     @abstractmethod
-    def deposit(self, amount):
+    def import_stock(self, quantity):
         pass
 
     @abstractmethod
-    def withdraw(self, amount):
+    def export_stock(self, quantity):
         pass
 
     def __add__(self, other):
-        if not isinstance(other, BaseAccount):
+        if not isinstance(other, BaseProduct):
             return NotImplemented
-        return self.balance + other.balance
+        return self.stock_quantity + other.stock_quantity
 
     def __lt__(self, other):
-        if not isinstance(other, BaseAccount):
+        if not isinstance(other, BaseProduct):
             return NotImplemented
-        return self.balance < other.balance
+        return self.stock_quantity < other.stock_quantity
 
     @staticmethod
-    def validate_account_number(account_number):
-        return account_number.isdigit() and len(account_number) == 10
+    def validate_product_code(code):
+        return len(code) == 10 and code[0].isalpha()
 
     @classmethod
-    def update_bank_name(cls, new_name):
-        cls.bank_name = new_name
+    def update_warehouse_name(cls, new_name):
+        cls.warehouse_name = new_name
 
 
-class SavingsAccount(BaseAccount):
+class ColdStorageProduct(BaseProduct):
+    def __init__(self, product_code, product_name, temperature):
+        super().__init__(product_code, product_name)
+        self.required_temperature = temperature
 
-    def __init__(self, account_number, owner_name, balance, interest_rate):
-        super().__init__(account_number, owner_name, balance)
-        self.interest_rate = interest_rate
+    def import_stock(self, quantity):
+        self._set_stock(self.stock_quantity + quantity)
 
-    def deposit(self, amount):
-        self.increase(amount)
+    def export_stock(self, quantity):
+        total = quantity * 1.05
 
-    def withdraw(self, amount):
-        fee = amount * 0.02
-
-        if amount + fee > self.balance:
-            print("Không đủ số dư")
+        if total > self.stock_quantity:
+            print("Không đủ hàng!")
             return
 
-        self.decrease(amount + fee)
+        self._set_stock(self.stock_quantity - total)
+        print("Xuất kho thành công!")
 
-    def apply_interest(self):
-        interest = self.balance * self.interest_rate
-        self.increase(interest)
-        return interest
+    def apply_cooling_cost(self):
+        return self.stock_quantity * 3000
 
 
-class CreditAccount(BaseAccount):
+class HazardousProduct(BaseProduct):
+    def __init__(self, product_code, product_name, limit):
+        super().__init__(product_code, product_name)
+        self.max_safety_limit = limit
 
-    def __init__(self, account_number, owner_name, balance, credit_limit):
-        super().__init__(account_number, owner_name, balance)
-        self.credit_limit = credit_limit
-
-    def deposit(self, amount):
-        self.increase(amount)
-
-    def withdraw(self, amount):
-
-        if self.balance - amount < -self.credit_limit:
-            print("Vượt quá hạn mức thấu chi")
+    def import_stock(self, quantity):
+        if self.stock_quantity + quantity > self.max_safety_limit:
+            print("Vượt giới hạn an toàn!")
             return
 
-        self.decrease(amount)
+        self._set_stock(self.stock_quantity + quantity)
+
+    def export_stock(self, quantity):
+        if quantity > self.stock_quantity:
+            print("Không đủ hàng!")
+            return
+
+        self._set_stock(self.stock_quantity - quantity)
 
 
-class DigitalPremiumMixin:
+class HybridPremiumProduct(ColdStorageProduct, HazardousProduct):
+    def __init__(self, product_code, product_name,
+                 temperature, limit):
+        ColdStorageProduct.__init__(
+            self,
+            product_code,
+            product_name,
+            temperature
+        )
+        self.max_safety_limit = limit
 
-    def cashback_reward(self, amount):
+    def import_stock(self, quantity):
+        if self.stock_quantity + quantity > self.max_safety_limit:
+            print("Vượt giới hạn an toàn!")
+            return
 
-        if amount > 5000000:
-            return amount * 0.01
-
-        return 0
-
-
-class HybridAccount(
-    SavingsAccount,
-    DigitalPremiumMixin
-):
-    pass
-
-
-class VNPayGateway:
-
-    def execute_pay(self, account, amount):
-        account.withdraw(amount)
-        print("Thanh toán qua VNPay thành công")
+        self._set_stock(self.stock_quantity + quantity)
 
 
-class ViettelMoneyGateway:
+class FedExCarrier:
+    def ship_package(self, product, quantity):
+        print(
+            f"FedEx vận chuyển {quantity} sản phẩm {product.product_code}"
+        )
 
-    def execute_pay(self, account, amount):
-        account.withdraw(amount)
-        print("Thanh toán qua Viettel Money thành công")
+
+class DHLCarrier:
+    def ship_package(self, product, quantity):
+        print(
+            f"DHL vận chuyển {quantity} sản phẩm {product.product_code}"
+        )
 
 
-def process_payment(gateway, account, amount):
-
+def dispatch_to_carrier(carrier, product, quantity):
     try:
-        gateway.execute_pay(account, amount)
-
+        carrier.ship_package(product, quantity)
+        product.export_stock(quantity)
     except AttributeError:
-        print("Cổng thanh toán không hợp lệ")
+        print("Đơn vị vận chuyển không hợp lệ!")
 
 
-accounts = []
-current_account = None
+products = []
+current_product = None
 
 while True:
-
-    print("\n===== VIETCOMBANK DIGIBANK =====")
-    print("1. Mở tài khoản")
+    print("\n===== AMAZON INVENTORY =====")
+    print("1. Tạo sản phẩm")
     print("2. Xem thông tin")
-    print("3. Nạp / Rút tiền")
-    print("4. Tính lãi")
-    print("5. So sánh & Gộp")
-    print("6. Thanh toán")
+    print("3. Nhập/Xuất kho")
+    print("4. Tính phí làm lạnh")
+    print("5. So sánh & cộng tồn kho")
+    print("6. Vận chuyển")
     print("7. Thoát")
 
     choice = input("Chọn: ")
 
     if choice == "1":
-
-        print("1. Savings")
-        print("2. Credit")
+        print("1. Cold")
+        print("2. Hazardous")
         print("3. Hybrid")
 
-        account_type = input("Loại tài khoản: ")
+        product_type = input("Loại: ")
 
-        account_number = input("Số tài khoản: ")
+        code = input("Mã sản phẩm: ")
 
-        if not BaseAccount.validate_account_number(account_number):
-            print("Số tài khoản không hợp lệ")
+        if not BaseProduct.validate_product_code(code):
+            print("Mã không hợp lệ!")
             continue
 
-        owner_name = input("Tên chủ tài khoản: ")
+        name = input("Tên sản phẩm: ")
 
-        if account_type == "1":
-
-            rate = float(input("Lãi suất: "))
-
-            current_account = SavingsAccount(
-                account_number,
-                owner_name,
-                0,
-                rate
+        if product_type == "1":
+            temp = int(input("Nhiệt độ: "))
+            current_product = ColdStorageProduct(
+                code,
+                name,
+                temp
             )
 
-        elif account_type == "2":
-
-            limit = float(input("Hạn mức tín dụng: "))
-
-            current_account = CreditAccount(
-                account_number,
-                owner_name,
-                0,
+        elif product_type == "2":
+            limit = int(input("Giới hạn: "))
+            current_product = HazardousProduct(
+                code,
+                name,
                 limit
             )
 
-        elif account_type == "3":
-
-            rate = float(input("Lãi suất: "))
-
-            current_account = HybridAccount(
-                account_number,
-                owner_name,
-                0,
-                rate
+        elif product_type == "3":
+            temp = int(input("Nhiệt độ: "))
+            limit = int(input("Giới hạn: "))
+            current_product = HybridPremiumProduct(
+                code,
+                name,
+                temp,
+                limit
             )
 
-        else:
-            print("Không hợp lệ")
-            continue
-
-        accounts.append(current_account)
-
-        print("Mở tài khoản thành công")
+        products.append(current_product)
+        print("Tạo thành công!")
 
     elif choice == "2":
-
-        if current_account is None:
-            print("Chưa có tài khoản")
+        if current_product is None:
+            print("Chưa có sản phẩm!")
             continue
 
-        print("\nLoại:",
-              current_account.__class__.__name__)
+        print("Loại:", type(current_product).__name__)
+        print("Mã:", current_product.product_code)
+        print("Tên:", current_product.product_name)
+        print("Tồn kho:", current_product.stock_quantity)
 
-        print("Tên:",
-              current_account.owner_name)
-
-        print("Số dư:",
-              f"{current_account.balance:,.0f}")
-
-        print("\nMRO:")
-
-        for cls in current_account.__class__.mro():
+        print("MRO:")
+        for cls in type(current_product).mro():
             print(cls.__name__)
 
     elif choice == "3":
-
-        if current_account is None:
-            print("Chưa có tài khoản")
+        if current_product is None:
+            print("Chưa có sản phẩm!")
             continue
 
-        print("1. Nạp")
-        print("2. Rút")
-
-        action = input("Chọn: ")
-
-        amount = float(input("Số tiền: "))
+        action = input("1.Nhập 2.Xuất: ")
+        quantity = int(input("Số lượng: "))
 
         if action == "1":
-
-            current_account.deposit(amount)
-
-            if isinstance(current_account, HybridAccount):
-
-                cashback = current_account.cashback_reward(amount)
-
-                if cashback > 0:
-                    current_account.deposit(cashback)
-
-                    print(
-                        f"Hoàn tiền: {cashback:,.0f}"
-                    )
-
-        elif action == "2":
-
-            current_account.withdraw(amount)
-
-        print(
-            f"Số dư hiện tại: "
-            f"{current_account.balance:,.0f}"
-        )
+            current_product.import_stock(quantity)
+        else:
+            current_product.export_stock(quantity)
 
     elif choice == "4":
-
         if isinstance(
-            current_account,
-            (SavingsAccount, HybridAccount)
+                current_product,
+                (ColdStorageProduct, HybridPremiumProduct)
         ):
-
-            interest = current_account.apply_interest()
-
             print(
-                f"Tiền lãi: "
-                f"{interest:,.0f}"
+                "Chi phí:",
+                current_product.apply_cooling_cost()
             )
-
-            print(
-                f"Số dư mới: "
-                f"{current_account.balance:,.0f}"
-            )
-
         else:
-            print(
-                "Tài khoản tín dụng "
-                "không hỗ trợ tính lãi"
-            )
+            print("Không hỗ trợ!")
 
     elif choice == "5":
-
-        if len(accounts) < 2:
-            print("Cần ít nhất 2 tài khoản")
+        if len(products) < 2:
+            print("Cần ít nhất 2 sản phẩm!")
             continue
 
-        print("\nDanh sách tài khoản:")
+        other = products[0]
 
-        for i, acc in enumerate(accounts):
-            print(
-                i,
-                acc.owner_name,
-                f"({acc.balance:,.0f})"
-            )
+        if other == current_product:
+            other = products[1]
 
-        index = int(
-            input(
-                "Chọn tài khoản đối ứng: "
-            )
-        )
+        print("Tổng tồn kho:", current_product + other)
 
-        other = accounts[index]
-
-        print(
-            "\nKết quả so sánh:"
-        )
-
-        print(
-            current_account < other
-        )
-
-        print(
-            "Tổng số dư:",
-            current_account + other
-        )
+        if current_product < other:
+            print("Tồn kho hiện tại ít hơn")
 
     elif choice == "6":
-
-        if current_account is None:
-            print("Chưa có tài khoản")
+        if current_product is None:
+            print("Chưa có sản phẩm!")
             continue
 
-        print("1. VNPay")
-        print("2. Viettel Money")
+        print("1. FedEx")
+        print("2. DHL")
 
-        gateway_choice = input("Chọn: ")
+        carrier_choice = input("Chọn: ")
+        quantity = int(input("Số lượng: "))
 
-        amount = float(
-            input("Số tiền hóa đơn: ")
-        )
-
-        if gateway_choice == "1":
-            gateway = VNPayGateway()
-
+        if carrier_choice == "1":
+            carrier = FedExCarrier()
         else:
-            gateway = ViettelMoneyGateway()
+            carrier = DHLCarrier()
 
-        process_payment(
-            gateway,
-            current_account,
-            amount
-        )
-
-        print(
-            "Số dư còn lại:",
-            f"{current_account.balance:,.0f}"
+        dispatch_to_carrier(
+            carrier,
+            current_product,
+            quantity
         )
 
     elif choice == "7":
-
-        print("Cảm ơn đã sử dụng chương trình")
+        print("Tạm biệt!")
         break
-
-    else:
-        print("Lựa chọn không hợp lệ")
